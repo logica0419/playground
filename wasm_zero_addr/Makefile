@@ -4,3 +4,7 @@ main.wasm: main.go
 PHONY: run
 run: main.wasm
 	wasmtime run --invoke "test_zero" main.wasm
+
+PHONY: clean
+clean:
+	rm -f main.wasm
