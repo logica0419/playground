@@ -1,1 +1,3 @@
-main.wasm
+*.wasm
+*.wat
+target/
