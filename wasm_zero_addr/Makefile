@@ -6,7 +6,7 @@ main-go.wasm: main.go
 main-go.wat: main-go.wasm
 	wasm2wat main-go.wasm -o main-go.wat
 
-PHONY: run-go
+.PHONY: run-go
 run-go: main-go.wasm main-go.wat
 	wasmtime run --invoke "test_zero" main-go.wasm
 
@@ -18,13 +18,20 @@ target/wasm32-wasip1/debug/main-rs.wasm: main.rs Cargo.toml
 main-rs.wat: target/wasm32-wasip1/debug/main-rs.wasm
 	wasm2wat target/wasm32-wasip1/debug/main-rs.wasm -o main-rs.wat
 
-PHONY: run-rs
+.PHONY: run-rs
 run-rs: target/wasm32-wasip1/debug/main-rs.wasm main-rs.wat
 	wasmtime run --invoke "test_zero" target/wasm32-wasip1/debug/main-rs.wasm
 
-# ----------------- Cleanup -----------------
+# ----------------- Other -----------------
 
-PHONY: clean
+.PHONY: all
+all: run-go run-rs
+
+.PHONY: test
+test:
+	@echo "No tests defined"
+
+.PHONY: clean
 clean:
 	@rm -rf target/wasm32-wasip1/debug
 	@rm -f *.wasm
