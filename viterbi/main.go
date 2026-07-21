@@ -148,7 +148,7 @@ func ViterbiDecode(receivedBits []uint8) []uint8 {
 		survivorPaths = newSurvivorPaths
 	}
 
-	// 最終的にレジスタ000に残った経路が再了解
+	// 最終的にレジスタ000に残った経路が最良解
 	bestPath := survivorPaths[0]
 
 	// 終端ビット3bitを除いて、元の情報ビット列だけを返す
@@ -175,10 +175,10 @@ func BitsToString(bits []uint8) string {
 	return string(result)
 }
 
-func main() {
-	// 例の受信ビット列
-	received := "110101001100010101110110010100101101111011"
+// 例の受信ビット列
+const received = "110101001100010101110110010100101101111011"
 
+func main() {
 	maximumLikelihoodDecoded := MaximumLikelihood(ParseBitString(received))
 	viterbiDecoded := ViterbiDecode(ParseBitString(received))
 
