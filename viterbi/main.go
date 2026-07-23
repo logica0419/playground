@@ -3,7 +3,7 @@ package main
 import "fmt"
 
 // 指定された畳み込み符号のプログラミング的表現
-func ConvolutionCode(reg uint8, inputBit uint8) ([2]uint8, uint8) {
+func ConvolutionCode(reg uint8, inputBit uint8) (uint8, uint8, uint8) {
 	// レジスタの各ビットを取り出す
 	reg1 := (reg >> 2) & 1
 	reg2 := (reg >> 1) & 1
@@ -16,7 +16,7 @@ func ConvolutionCode(reg uint8, inputBit uint8) ([2]uint8, uint8) {
 	// 次のレジスタを計算
 	nextReg := (inputBit << 2) | (reg1 << 1) | reg2
 
-	return [2]uint8{out1, out2}, nextReg
+	return out1, out2, nextReg
 }
 
 // ハミング距離の計算
@@ -37,19 +37,16 @@ func HammingDistance(left []uint8, right []uint8) int {
 }
 
 // 入力ビット列の畳み込み符号化
-func ConvolutionEncode(inputBits []uint8) []uint8 {
-	// 出力ビット列とレジスタの初期化
-	encodedBits := make([]uint8, 0, len(inputBits)*2)
+func ConvolutionEncode(inputBits []uint8, encodedBits []uint8) {
+	// レジスタの初期化
 	reg := uint8(0)
 
 	// 各入力bitを順番に符号化
-	for _, inputBit := range inputBits {
-		outputBits, nextReg := ConvolutionCode(reg, inputBit)
-		encodedBits = append(encodedBits, outputBits[0], outputBits[1])
+	for index, inputBit := range inputBits {
+		out1, out2, nextReg := ConvolutionCode(reg, inputBit)
+		encodedBits[index*2], encodedBits[index*2+1] = out1, out2
 		reg = nextReg
 	}
-
-	return encodedBits
 }
 
 // 最も単純な最尤系列推定
@@ -65,6 +62,8 @@ func MaximumLikelihood(received []uint8) []uint8 {
 	bestDistance := len(received) + 1
 	// 候補ビット列を生成するための作業領域
 	currentInput := make([]uint8, totalInputLength)
+	// 符号化出力バッファ
+	currentOutput := make([]uint8, len(received))
 
 	for candidateIndex := range totalCandidates {
 		// candidateIndexを情報ビット列に変換し、終端3bitは0のままにする
@@ -74,7 +73,7 @@ func MaximumLikelihood(received []uint8) []uint8 {
 		}
 
 		// 候補を符号化
-		currentOutput := ConvolutionEncode(currentInput)
+		ConvolutionEncode(currentInput, currentOutput)
 
 		// 受信列とのハミング距離を計算し、最良候補を更新
 		distance := HammingDistance(received, currentOutput)
@@ -98,29 +97,31 @@ func ViterbiDecode(receivedBits []uint8) []uint8 {
 	}
 
 	// レジスタは3bitなので、状態数は2^3 = 8
-	numStates := 8
+	numStates := 1 << 3
 	// 受信列長 + 1を最大パスメトリック (到達不能状態) として設定
 	maxPathMetric := len(receivedBits) + 1
 	// 先頭はレジスタ000のみをパスメトリック0、他は到達不能として初期化
-	pathMetrics := make([]int, numStates)
+	var pathMetrics [8]int
 	for state := range pathMetrics {
 		pathMetrics[state] = maxPathMetric
 	}
 	pathMetrics[0] = 0
 
-	// あるステップまでで、各レジスタ状態に到達するまでの最良入力ビット列を保持
-	survivorPaths := make([][]uint8, numStates)
+	// トレースバック用テーブル:
+	// traceback[step][state] = その状態に至った入力ビット
+	// prevState[step][state] = 1ステップ前のレジスタ状態
+	traceback := make([][8]uint8, len(symbols)+1)
+	prevState := make([][8]uint8, len(symbols)+1)
 
-	// 各シンボルについて、全レジスタ状態から次レジスタ状態への候補を評価s
-	for _, symbol := range symbols {
-		// 次ステップ用のパスメトリックを、到達不能として初期化
-		newPathMetrics := make([]int, numStates)
+	// 次ステップのパスメトリックを保持する配列
+	var newPathMetrics [8]int
+
+	// 各シンボルについて、全レジスタ状態から次レジスタ状態への候補を評価
+	for step, symbol := range symbols {
+		// 次ステップのパスメトリックを、全て到達不能状態として初期化する
 		for state := range newPathMetrics {
 			newPathMetrics[state] = maxPathMetric
 		}
-
-		// 次ステップの生存パスを保持
-		newSurvivorPaths := make([][]uint8, numStates)
 
 		for state := range numStates {
 			// 現在到達できない状態は無視
@@ -131,27 +132,32 @@ func ViterbiDecode(receivedBits []uint8) []uint8 {
 			// 今のレジスタ状態から、入力bit 0/1 の2つの分岐を評価する
 			for inputBit := uint8(0); inputBit <= 1; inputBit++ {
 				// 畳み込み計算
-				outputBits, nextReg := ConvolutionCode(uint8(state), inputBit)
+				out1, out2, nextReg := ConvolutionCode(uint8(state), inputBit)
 				// 累積パスメトリックを計算
-				currentMetric := pathMetrics[state] + HammingDistance(symbol[:], outputBits[:])
+				currentMetric := pathMetrics[state] + HammingDistance(symbol[:], []uint8{out1, out2})
 
-				// これまでの候補よりパスメトリックが小さければ、その状態の生存パスを更新
+				// これまでの候補よりパスメトリックが小さければ、その状態の情報を更新
 				if currentMetric < newPathMetrics[nextReg] {
 					newPathMetrics[nextReg] = currentMetric
-					newSurvivorPaths[nextReg] = append(append([]uint8(nil), survivorPaths[state]...), inputBit)
+					traceback[step+1][nextReg] = inputBit
+					prevState[step+1][nextReg] = uint8(state)
 				}
 			}
 		}
 
-		// パスメトリックと生存パスを更新
+		// パスメトリックを更新
 		pathMetrics = newPathMetrics
-		survivorPaths = newSurvivorPaths
 	}
 
-	// 最終的にレジスタ000に残った経路が最良解
-	bestPath := survivorPaths[0]
+	// 最終状態000から逆向きにトレースバックして復号
+	bestPath := make([]uint8, len(symbols))
+	reg := uint8(0)
+	for step := len(symbols) - 1; step >= 0; step-- {
+		bestPath[step] = traceback[step+1][reg]
+		reg = prevState[step+1][reg]
+	}
 
-	// 終端ビット3bitを除いて、元の情報ビット列だけを返す
+	// 終端ビット3bitを除いて、元の情報ビット列だけ返す
 	return bestPath[:len(bestPath)-3]
 }
 
