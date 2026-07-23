@@ -87,6 +87,11 @@ func MaximumLikelihood(received []uint8) []uint8 {
 	return bestInput[:infoLength]
 }
 
+type TracebackEntry struct {
+	inputBit  uint8
+	prevState uint8
+}
+
 // ビタビ複合
 func ViterbiDecode(receivedBits []uint8) []uint8 {
 	// 受信列を2bitごとのシンボルに分割
@@ -107,11 +112,8 @@ func ViterbiDecode(receivedBits []uint8) []uint8 {
 	}
 	pathMetrics[0] = 0
 
-	// トレースバック用テーブル:
-	// traceback[step][state] = その状態に至った入力ビット
-	// prevState[step][state] = 1ステップ前のレジスタ状態
-	traceback := make([][8]uint8, len(symbols)+1)
-	prevState := make([][8]uint8, len(symbols)+1)
+	// トレースバック用テーブル: 各ステップごとに、各レジスタ状態に到達するための情報を保持
+	traceback := make([][8]TracebackEntry, len(symbols)+1)
 
 	// 次ステップのパスメトリックを保持する配列
 	var newPathMetrics [8]int
@@ -139,8 +141,7 @@ func ViterbiDecode(receivedBits []uint8) []uint8 {
 				// これまでの候補よりパスメトリックが小さければ、その状態の情報を更新
 				if currentMetric < newPathMetrics[nextReg] {
 					newPathMetrics[nextReg] = currentMetric
-					traceback[step+1][nextReg] = inputBit
-					prevState[step+1][nextReg] = uint8(state)
+					traceback[step+1][nextReg] = TracebackEntry{inputBit: inputBit, prevState: uint8(state)}
 				}
 			}
 		}
@@ -153,8 +154,9 @@ func ViterbiDecode(receivedBits []uint8) []uint8 {
 	bestPath := make([]uint8, len(symbols))
 	reg := uint8(0)
 	for step := len(symbols) - 1; step >= 0; step-- {
-		bestPath[step] = traceback[step+1][reg]
-		reg = prevState[step+1][reg]
+		entry := traceback[step+1][reg]
+		bestPath[step] = entry.inputBit
+		reg = entry.prevState
 	}
 
 	// 終端ビット3bitを除いて、元の情報ビット列だけ返す
