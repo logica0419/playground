@@ -28,4 +28,4 @@ deriv f = (\x -> (f (x + h) - f x) / h)
 -- 問5
 
 newton :: (Fractional a) => (a -> a) -> a -> a
-newton f x = foldl (\x _ -> x - f x / deriv f x) x [1 .. 10]
+newton f x = foldl (\acc _ -> acc - f acc / deriv f acc) x [1 .. 10]
