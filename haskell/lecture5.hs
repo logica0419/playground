@@ -20,7 +20,7 @@ oddSquareSum = sum . takeWhile (< 10000) . map (^ 2) . filter odd $ [1 ..]
 
 -- 問4
 
-deriv :: (Double -> Double) -> Double -> Double
+deriv :: (Fractional a) => (a -> a) -> a -> a
 deriv f = (\x -> (f (x + h) - f x) / h)
   where
     h = 0.0001
@@ -28,4 +28,4 @@ deriv f = (\x -> (f (x + h) - f x) / h)
 -- 問5
 
 newton :: (Fractional a) => (a -> a) -> a -> a
-newton f x 
+newton f x = foldl (\x _ -> x - f x / deriv f x) x [1 .. 10]
