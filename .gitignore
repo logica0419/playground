@@ -1,7 +1,4 @@
 *.hi
 *.o
 
-lecture*
-!lecture*.hs
-
 .DS_Store
